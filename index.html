@@ -1,0 +1,1094 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Small Days</title>
+<style>
+  :root {
+    --bg: #0b0f0b;
+    --panel: #101710;
+    --fg: #7dff8a;
+    --bright: #c8ffcf;
+    --dim: #3f7a46;
+    --warn: #ffd84a;
+    --danger: #ff5a5a;
+    --gold: #ffcf5a;
+    --border: #2a4a2e;
+  }
+  body[data-time="morning"]   { --panel: #12190f; }
+  body[data-time="afternoon"] { --panel: #101710; }
+  body[data-time="evening"]   { --panel: #14130f; }
+  body[data-time="night"]     { --panel: #0c0f16; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+    font-size: 14px;
+    line-height: 1.5;
+    display: flex;
+    justify-content: center;
+    padding: 24px 16px;
+  }
+  .frame {
+    width: 100%;
+    max-width: 720px;
+    border: 2px solid var(--border);
+    background: var(--panel);
+    box-shadow: 0 0 24px rgba(125, 255, 138, 0.08);
+    transition: background 0.6s;
+  }
+  section { padding: 12px 16px; border-bottom: 2px solid var(--border); }
+  section:last-child { border-bottom: none; }
+  header { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .title { font-weight: bold; letter-spacing: 2px; }
+  .mood { font-size: 18px; margin-left: 6px; }
+  .sub { color: var(--dim); margin-top: 2px; }
+  .sub b { color: var(--fg); font-weight: normal; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 600px) { .cols { grid-template-columns: 1fr; } }
+  .row { display: flex; gap: 8px; white-space: pre; }
+  .label { width: 8ch; }
+  .bar { letter-spacing: -1px; }
+  .val { min-width: 4ch; text-align: right; }
+  .stars { color: var(--gold); letter-spacing: -1px; }
+  .xpbar { color: var(--dim); letter-spacing: -1px; }
+  .warn { color: var(--warn); }
+  .danger { color: var(--danger); }
+  .colhead { color: var(--dim); margin-bottom: 4px; }
+  #log { height: 300px; overflow-y: auto; }
+  #log div { color: var(--dim); margin-bottom: 2px; }
+  #log div:first-child { color: var(--fg); }
+  #log .big { color: var(--gold); border: 1px solid var(--gold); padding: 2px 8px; margin: 4px 0; }
+  #log .news { font-style: italic; color: #9fd8a6; }
+  #log .thought { font-style: italic; color: var(--warn); }
+  #log .summary { color: var(--bright); border-left: 3px solid var(--dim); padding-left: 8px; white-space: pre-wrap; }
+  .group { margin-bottom: 8px; }
+  .group-title { color: var(--dim); font-size: 12px; margin-bottom: 4px; }
+  .btns { display: flex; flex-wrap: wrap; gap: 6px; }
+  button {
+    font: inherit;
+    background: transparent;
+    color: var(--fg);
+    border: 1px solid var(--fg);
+    padding: 5px 10px;
+    cursor: pointer;
+  }
+  button:hover:not(:disabled) { background: var(--fg); color: var(--bg); }
+  button:disabled { color: var(--dim); border-color: var(--dim); cursor: not-allowed; }
+  button.selected { background: var(--fg); color: var(--bg); }
+  .key { opacity: 0.6; }
+  .hint { color: var(--dim); font-size: 12px; margin-top: 8px; }
+  input[type=text] {
+    font: inherit; background: var(--bg); color: var(--fg);
+    border: 1px solid var(--fg); padding: 6px 10px; width: 100%; max-width: 280px;
+  }
+  .choice-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+  .choice-grid button { text-align: left; }
+  .choice-grid small { display: block; opacity: 0.75; white-space: normal; }
+  .setup-title { font-size: 20px; letter-spacing: 3px; }
+  .hidden { display: none; }
+</style>
+</head>
+<body data-time="morning">
+
+<!-- ================= SETUP SCREEN ================= -->
+<div class="frame" id="setup">
+  <section>
+    <div class="setup-title">SMALL DAYS</div>
+    <div class="sub">A tiny life. One day at a time.</div>
+  </section>
+  <section>
+    <div class="colhead">What's your name?</div>
+    <input type="text" id="nameInput" value="Sam" maxlength="16">
+  </section>
+  <section>
+    <div class="colhead">Pick a trait</div>
+    <div class="choice-grid" id="traitChoices"></div>
+  </section>
+  <section>
+    <div class="colhead">Pick a career</div>
+    <div class="choice-grid" id="careerChoices"></div>
+  </section>
+  <section>
+    <button id="startBtn">▶ Start your life</button>
+  </section>
+</div>
+
+<!-- ================= GAME SCREEN ================= -->
+<div class="frame hidden" id="game">
+  <section>
+    <header>
+      <span class="title">SMALL DAYS</span>
+      <span><span id="clock"></span><span class="mood" id="mood"></span></span>
+    </header>
+    <div class="sub" id="identity"></div>
+  </section>
+  <section class="cols">
+    <div id="needs"></div>
+    <div id="skills"></div>
+  </section>
+  <section id="log"></section>
+  <section>
+    <div id="actions"></div>
+    <div class="hint">Keys 1–9, then Q W E R T Y for the rest. Hover over a greyed-out button to see why.</div>
+  </section>
+</div>
+
+<script>
+// =====================================================================
+// DATA
+// =====================================================================
+const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const SKILLS = ["fitness", "cooking", "charm", "smarts", "creativity"];
+const SKILL_LABELS = { fitness: "Fitness", cooking: "Cooking", charm: "Charm", smarts: "Smarts", creativity: "Create" };
+const NEED_LABELS = { energy: "Energy", hunger: "Hunger", fun: "Fun" };
+const DECAY = { energy: 4, hunger: 5, fun: 3 };
+
+const TRAITS = {
+  athletic:  { emoji: "🏃", name: "Athletic",  skill: "fitness",  desc: "Fitness XP ×1.5. Hungers faster." },
+  bookworm:  { emoji: "📚", name: "Bookworm",  skill: "smarts",   desc: "Smarts XP ×1.5. Games are less fun." },
+  foodie:    { emoji: "🍳", name: "Foodie",    skill: "cooking",  desc: "Cooking XP ×1.5, home meals fill more. Eating out costs $15." },
+  charmer:   { emoji: "💬", name: "Charmer",   skill: "charm",    desc: "Charm XP ×1.5. Work drains more fun." },
+  nightowl:  { emoji: "🦉", name: "Night Owl", skill: null,       desc: "Work until 23:00, no midnight penalty. Mornings before 10:00 cost extra energy." }
+};
+
+const CAREERS = {
+  office: {
+    emoji: "🏢", name: "Office", skills: ["smarts", "charm"],
+    ranks: [
+      { title: "Intern", pay: 30, lines: ["You fixed the printer by glaring at it.", "You fetched 14 coffees. Nobody learned your name.", "You were cc'd on an email. Progress!"] },
+      { title: "Assistant", pay: 45, lines: ["You scheduled a meeting about scheduling meetings.", "You found the stapler everyone thought was a myth.", "You survived a 3-hour all-hands with your soul mostly intact."] },
+      { title: "Analyst", pay: 65, lines: ["Your spreadsheet had so many pivot tables it achieved sentience.", "You made a chart go up and to the right. Applause.", "You said 'synergy' unironically. You're one of them now."] },
+      { title: "Manager", pay: 90, lines: ["You gave a pep talk. One intern teared up.", "You approved a budget for a ping-pong table. Morale +100.", "You said 'let's take this offline' and everyone was relieved."] },
+      { title: "VP", pay: 130, lines: ["Your corner office has a plant now. It judges you.", "You flew business class to a meeting that could've been an email.", "You stared out the window thoughtfully. Stocks went up."] },
+      { title: "CEO", pay: 200, lines: ["You rang the opening bell. It was louder than expected.", "You announced quarterly profits in a turtleneck.", "The board gave you a standing ovation and a fruit basket."] },
+      { title: "Mega-CEO", pay: 350, lines: ["You acquired a competitor. Then their competitor. Then the concept of competition.", "You fired the board. Then rehired them as your personal hype choir.", "You bought the moon's naming rights. It's 'Moon™' now."] },
+      { title: "World Oligarch", pay: 600, lines: ["You privatized Tuesdays. Everyone pays $2 to use them.", "Three countries asked permission before holding elections.", "You own a yacht that has its own, smaller yacht inside it."] },
+      { title: "Shadow Emperor of Earth", pay: 1000, lines: ["You moved a mountain 6 inches to the left. For feng shui.", "World leaders bow when you enter the Zoom call.", "You declared gravity 'under review'. Things got floaty for an hour."] },
+      { title: "Galactic Chairman", pay: 2500, lines: ["You hostile-takeovered a nebula. It didn't see it coming.", "Aliens now pay quarterly dues to you in crystals.", "You scheduled a meeting with the Sun. It was rescheduled twice."] }
+    ]
+  },
+  culinary: {
+    emoji: "🍽️", name: "Culinary", skills: ["cooking", "charm"],
+    ranks: [
+      { title: "Dishwasher", pay: 28, lines: ["You washed 400 plates. Your hands are prunes.", "A pan fought back. You won.", "You found a fork in the soup station. Mysteries abound."] },
+      { title: "Line Cook", pay: 42, lines: ["You yelled 'BEHIND!' with real confidence.", "You flipped a pancake perfectly. Nobody saw.", "You burned exactly one steak. Chef pretended not to notice."] },
+      { title: "Sous Chef", pay: 60, lines: ["You tasted the sauce 30 times. It's perfect now.", "You rescued a soufflé from total collapse.", "The line cooks call you 'Chef' now. It feels incredible."] },
+      { title: "Head Chef", pay: 90, lines: ["A food critic sent their compliments. Your sous chef cried.", "You invented a dish. It's mostly butter. It's sold out.", "You yelled 'SERVICE!' and the whole kitchen moved as one."] },
+      { title: "Restaurateur", pay: 135, lines: ["Your restaurant has a three-week waitlist.", "A celebrity tried to bribe their way in. You said no.", "You opened a second location. It smells like success and garlic."] },
+      { title: "Celebrity Chef", pay: 200, lines: ["You filmed a cooking show. You only swore twice.", "Your face is on a jar of pasta sauce.", "You judged a cooking competition and made someone cry (nicely)."] },
+      { title: "Michelin Warlord", pay: 350, lines: ["You conquered three rival restaurants with a single risotto.", "Your knife collection is now legally classified as an army.", "Critics fear you. Critics LOVE fearing you."] },
+      { title: "Minister of Global Flavor", pay: 600, lines: ["You declared cilantro illegal in 40 countries. Half the world rejoiced.", "The UN now opens every session with your bread rolls.", "You salted the ocean. It needed it."] },
+      { title: "Chef to the Gods", pay: 1000, lines: ["Zeus sent back the soup. You sent it back to Zeus. He apologized.", "You catered a wedding between two constellations.", "A deity left a five-star review. The sky glowed for a week."] },
+      { title: "Living Embodiment of Soup", pay: 2500, lines: ["You are no longer sure where you end and the broth begins.", "Pilgrims travel for miles to be ladled by you.", "You simmered gently for 6 hours. It was transcendent."] }
+    ]
+  },
+  creative: {
+    emoji: "🎨", name: "Creative", skills: ["creativity", "smarts"],
+    ranks: [
+      { title: "Barista w/ a Dream", pay: 25, lines: ["You drew a latte heart. It looked like a potato.", "A customer asked about your 'real job'. Ouch.", "You doodled your masterpiece on a napkin. It got thrown out."] },
+      { title: "Freelancer", pay: 40, lines: ["A client wanted 'more pop'. You added pop.", "You got paid in exposure AND money this time.", "You designed a logo for a dog groomer. It's a good dog."] },
+      { title: "Designer", pay: 60, lines: ["You moved a button 2 pixels to the left. Revolutionary.", "Your font choice started an office debate.", "You presented a mood board. The mood was 'nailed it'."] },
+      { title: "Art Director", pay: 90, lines: ["You said 'make it pop' to someone else. Full circle.", "Your campaign is on a billboard downtown.", "You rejected 40 concepts. The 41st was perfect."] },
+      { title: "Studio Head", pay: 130, lines: ["Your studio won an award shaped like a weird spiral.", "You gave a TED-style talk about 'the creative void'.", "Young artists ask for your autograph. On their art."] },
+      { title: "Icon", pay: 200, lines: ["A museum opened a wing in your name.", "Your doodle napkin from years ago sold at auction.", "Fashion week called. They want 'your vibe'."] },
+      { title: "Art Cult Leader", pay: 350, lines: ["Your followers wear only the color you invented: 'Glorp'.", "You painted a single dot. 10,000 people wept.", "Your morning doodles are now considered scripture."] },
+      { title: "Reality Designer", pay: 600, lines: ["You redesigned the color blue. Everyone agrees it's better.", "You added a new day of the week. It's called 'Blursday'.", "You kerned the skyline. It's so much cleaner now."] },
+      { title: "Architect of Dreams", pay: 1000, lines: ["Everyone on Earth dreamed about your new collection last night.", "You built a staircase that goes sideways. People love it.", "You sketched a door in the air. It opened."] },
+      { title: "Painter of the Universe", pay: 2500, lines: ["You painted a new galaxy. Astronomers are furious.", "You signed the night sky. Bottom right corner.", "You touched up the sunset. It's 4% more orange now."] }
+    ]
+  },
+  athletics: {
+    emoji: "💪", name: "Athletics", skills: ["fitness", "charm"],
+    ranks: [
+      { title: "Gym Cleaner", pay: 28, lines: ["You wiped 200 sweaty benches. Character building.", "Someone left a protein shake to ferment. You handled it.", "You re-racked weights nobody else would re-rack."] },
+      { title: "Trainer", pay: 42, lines: ["You yelled 'ONE MORE!' eleven times.", "A client hit a personal best. You high-fived so hard.", "You explained 'leg day' to a skeptic. Converted."] },
+      { title: "Coach", pay: 62, lines: ["Your team won 3–1. You gave a speech about heart.", "You drew plays on a whiteboard with dramatic arrows.", "You blew the whistle with tremendous authority."] },
+      { title: "Pro Athlete", pay: 95, lines: ["You scored the winning point. The crowd chanted your name.", "Your sneakers got their own sponsorship deal.", "You did a post-game interview and said 'we gave 110%'."] },
+      { title: "Team Captain", pay: 140, lines: ["You led the team to a championship run.", "Kids wear jerseys with your number on them.", "You gave a locker room speech so good it's on YouTube."] },
+      { title: "Legend", pay: 200, lines: ["They're building a statue of you. It's a little off.", "Your jersey was retired. You cried on live TV.", "Sports shows debate whether you're the G.O.A.T. (you are)."] },
+      { title: "Olympic Demigod", pay: 350, lines: ["You won gold in 14 events, including several you made up.", "You ran a marathon backwards. Still set a record.", "The medals now come pre-engraved with your name."] },
+      { title: "Human Weapon", pay: 600, lines: ["You sneezed and a building's windows applauded.", "The military asked you to stop jogging near the border.", "You did a push-up and the Earth's rotation hiccuped."] },
+      { title: "Physics Violator", pay: 1000, lines: ["You jumped and simply... didn't come down for a while.", "Scientists wrote a paper titled 'Please Stop'.", "You outran your own shadow. It filed a complaint."] },
+      { title: "Cosmic Champion", pay: 2500, lines: ["You arm-wrestled a black hole. It's a draw, technically.", "You did laps around Saturn's rings. Personal best.", "The universe's sports league named you MVP for eternity."] }
+    ]
+  }
+};
+
+const LEVELUP_QUIPS = {
+  fitness: ["You can now climb stairs without negotiating with them.", "Your muscles have muscles. Small ones.", "You jogged past a pigeon. It was impressed.", "You opened a stubborn jar on the first try."],
+  cooking: ["You can now make eggs that aren't also charcoal.", "You know what 'julienne' means. Mostly.", "The smoke alarm has stopped being your sous chef.", "You seasoned something correctly. By instinct."],
+  charm: ["You made eye contact AND small talk. Simultaneously.", "Strangers now ask you for directions. You're approachable!", "You told a joke and people laughed WITH you.", "You remembered three names at once. Wizardry."],
+  smarts: ["You finally understand compound interest.", "You won an argument on the internet. Rare.", "You did long division in your head. Showoff.", "You read a whole book without checking your phone."],
+  creativity: ["You drew a hand with exactly five fingers.", "Your stick figures now have emotional depth.", "You wrote a haiku. It was 5-7-5 AND moving.", "Your fridge is now a gallery."]
+};
+
+const HEADLINES = [
+  "Local Goose Elected to City Council", "Maple St. Pothole Declared Historic Landmark",
+  "Man Claims Pigeons 'Know Something'", "Town Bakery Runs Out of Bread, Panic Ensues",
+  "Mayor Loses Keys, Declares Citywide Search", "Library Book Returned 40 Years Late, Fine Forgiven",
+  "Squirrel Steals Entire Sandwich, Witnesses Stunned", "Local Cat Achieves 21 Hours of Sleep",
+  "Traffic Light on 5th Stuck on Yellow, Drivers Confused", "Annual Pickle Festival Cancelled Due to Too Many Pickles",
+  "Scientists Confirm Mondays Are Long", "Ice Cream Truck Spotted in Area, Children Mobilize",
+  "Park Bench Dedicated to 'A Pretty Good Guy'", "Town Clock Ten Minutes Fast, Nobody Cares",
+  "Raccoon Gang Hits Dumpsters on Elm St.", "Local Man Finishes Puzzle, Missing One Piece",
+  "Weather Forecast Correct for Once", "Garden Gnome Mysteriously Relocated Two Feet",
+  "Coffee Shop Introduces 'Medium-Small' Size", "Mysterious Hum Downtown Turns Out to Be Fridge",
+  "High School Band Learns Second Song", "Bus Arrives on Time; Riders Suspicious",
+  "Duck Pond Ducks Unionize, Demand Better Bread", "Lost Balloon Found 3 Towns Over",
+  "Town Votes Tuesdays 'Fine'"
+];
+
+const WEATHER = [
+  { emoji: "☀️", name: "Sunny", weight: 4 },
+  { emoji: "🌧️", name: "Rainy", weight: 2 },
+  { emoji: "🌫️", name: "Foggy", weight: 1 },
+  { emoji: "❄️", name: "Snowy", weight: 1 }
+];
+
+const NEIGHBORS = {
+  rosa: {
+    name: "Rosa", emoji: "🎭", desc: "retired opera singer",
+    awkward: ["Rosa sang at you for ten minutes. You didn't know when to clap.", "Rosa asked your vocal range. You said 'medium'. She sighed."],
+    good: ["Rosa told you about her 1987 tour of Milan. Scandalous!", "Rosa taught you to breathe 'from the diaphragm'. You feel taller."],
+    great: ["Rosa called you 'darling' and gave you a cannoli.", "You and Rosa sang a duet. The whole café applauded!"]
+  },
+  dev: {
+    name: "Dev", emoji: "💻", desc: "anxious coder",
+    awkward: ["Dev explained recursion. Then explained it again. Then again.", "Dev asked if you'd 'heard about the bug'. You hadn't. He left."],
+    good: ["Dev showed you an app he's building. It's for organizing socks.", "You and Dev complained about the Wi-Fi together. Bonding."],
+    great: ["Dev laughed so hard at your joke he snorted coffee.", "Dev said you're 'the only one who gets it'. You kind of do."]
+  },
+  pickles: {
+    name: "Mr. Pickles", emoji: "🐈", desc: "the café cat",
+    awkward: ["Mr. Pickles stared at you, then knocked your cup over.", "You tried to pet Mr. Pickles. He filed a formal complaint (hissed)."],
+    good: ["Mr. Pickles allowed one (1) head scratch.", "Mr. Pickles sat near you. Not WITH you. Near."],
+    great: ["Mr. Pickles fell asleep in your lap. You cannot move. Ever.", "Mr. Pickles brought you a gift: a bottle cap. You are chosen."]
+  },
+  jun: {
+    name: "Jun", emoji: "🛸", desc: "conspiracy-theorist barista",
+    awkward: ["Jun whispered that birds aren't real. You nodded too long.", "Jun asked whose side you're on. You said 'the coffee's'. Wrong answer."],
+    good: ["Jun explained the 'truth' about the moon. It was entertaining.", "Jun gave you a free shot of espresso 'for the resistance'."],
+    great: ["Jun let you into the secret society. It's a book club.", "Jun named a drink after you. It's 90% foam."]
+  }
+};
+
+const THOUGHTS = {
+  energy: ["Your eyelids weigh about 40 pounds each.", "You yawned so hard your jaw clicked.", "You briefly forgot what a chair is."],
+  hunger: ["Your stomach makes a noise like a dial-up modem.", "You're starting to look at your houseplant differently.", "You can smell a pizza that doesn't exist."],
+  fun:    ["You stared at a wall. The wall stared back.", "Everything feels a bit gray today.", "You sighed audibly in public. Twice."]
+};
+
+const RESTAURANTS = ["Taco Tuesday's", "Noodle Hut", "The Greasy Fork", "Burger Barn", "Pho Real", "Pizza My Heart", "The Sad Salad"];
+const GAMES = ["Space Llama Racers", "an indie game about a sad frog", "a cooking show marathon", "Dungeon Dads III", "a nature documentary about crabs", "online chess (you lost 4 times)", "a reality show about competitive gardening"];
+const CREATIONS = ["painted a sunset", "wrote a short story", "composed a little tune", "sketched your houseplant", "wrote a poem about Tuesday", "painted a very abstract cat"];
+const PARK_FINDS = [
+  { text: "You found $5 on the path!", money: 5 },
+  { text: "You found a really good stick.", money: 0 },
+  { text: "A duck followed you for a while. Friendship?", money: 0 },
+  { text: "You found $2 and a single mitten.", money: 2 },
+  { text: "Someone's dog ran up and gave you a lick.", money: 0 }
+];
+
+// =====================================================================
+// RANDOM EVENTS  (tier 0 = normal life, 1 = odd, 2 = cosmic)
+// Each choice returns the log text for its outcome.
+// =====================================================================
+const chk = (sk, diff) => Math.random() * 10 + level(sk) >= diff;
+const N = () => state.needs;
+
+const EVENTS = [
+  // ---------- TIER 0: ordinary life ----------
+  { tier: 0, text: "You spot a $20 bill on the sidewalk. Nobody's around.", choices: [
+    { label: "Pocket it", fn: s => { s.money += 20; return "💵 +$20. Finders keepers."; } },
+    { label: "Turn it in", fn: s => { N().fun += 10; gainXP("charm", 20); return "😇 The cop gave you a sticker. You feel great. +Fun, +Charm"; } }
+  ]},
+  { tier: 0, text: "A stranger is struggling with a giant couch on the stairs.", choices: [
+    { label: "Help (Fitness)", fn: s => chk("fitness", 6)
+      ? (s.money += 15, gainXP("fitness", 20), "💪 You carried it like a hero. They tipped you $15.")
+      : (N().energy -= 15, "😵 The couch won. −15 Energy.") },
+    { label: "Pretend to be on the phone", fn: () => "📱 'Yes, Mom. Yes. Totally.' You escape." }
+  ]},
+  { tier: 0, text: "Pop quiz at work! Your boss wants a summary of last quarter. Now.", choices: [
+    { label: "Wing it (Smarts)", fn: s => chk("smarts", 6)
+      ? (s.career.perf = Math.min(100, s.career.perf + 10), "🧠 Nailed it. Your boss looks genuinely surprised. +10 Perf")
+      : (s.career.perf = Math.max(0, s.career.perf - 8), "😬 You said 'synergy' 9 times. −8 Perf") },
+    { label: "Fake a sneeze attack", fn: s => { s.career.perf -= 3; return "🤧 Achoo. Achoo. ACHOO. −3 Perf, but you survived."; } }
+  ]},
+  { tier: 0, text: "Your phone buzzes: 'Hey it's Dev, wanna grab noodles? 🍜'", choices: [
+    { label: "Sure! ($8)", fn: s => { s.money -= 8; N().hunger += 30; N().fun += 15; s.neighbors.dev += 8; return "🍜 Dev talked about sock apps for an hour. Lovely. +Hunger, +Fun"; } },
+    { label: "Leave on read", fn: () => "📵 You watch the typing bubble appear and disappear. Guilt." }
+  ]},
+  { tier: 0, text: "Your landlord knocks. 'Surprise inspection!' The apartment is... lived in.", choices: [
+    { label: "Charm them (Charm)", fn: s => chk("charm", 6)
+      ? (gainXP("charm", 15), "😎 You talked about their grandkids. Inspection passed.")
+      : (s.money -= 25, "🧾 'Is that... a sock on the ceiling?' Cleaning fee −$25.") },
+    { label: "Hide in the closet", fn: s => { N().fun += 5; return "🚪 They left a note: 'I know you're in there.' Worth it."; } }
+  ]},
+  { tier: 0, text: "Mr. Pickles the café cat is sitting on your doorstep. He has never been here before.", choices: [
+    { label: "Let him in", fn: s => { N().fun += 20; s.neighbors.pickles += 10; return "🐈 He inspected everything and approved of nothing. You're honored."; } },
+    { label: "Close the door slowly", fn: () => "🐈 He's still there. Watching. Every time you look." }
+  ]},
+  { tier: 0, text: "Free sample day at the grocery store!", choices: [
+    { label: "Eat ALL the samples", fn: () => { N().hunger += 35; return "🧀 You made 11 laps. The staff know your face now. +35 Hunger"; } },
+    { label: "Be dignified", fn: () => { N().hunger += 5; return "🥄 One (1) cube of cheese. Restraint."; } }
+  ]},
+
+  // ---------- TIER 1: odd ----------
+  { tier: 1, text: "A man in a trench coat offers you 'a slightly used wish' for $30.", choices: [
+    { label: "Buy the wish ($30)", fn: s => {
+      s.money -= 30;
+      const r = Math.random();
+      if (r < 0.4) { s.money += 120; return "✨ You wished for money. $120 falls out of a cloud."; }
+      if (r < 0.8) { N().energy = maxEnergy(); N().fun = 100; return "✨ You wished to feel great. You feel GREAT."; }
+      return "🦆 The wish was used. You now hear faint quacking at all times.";
+    } },
+    { label: "Walk away briskly", fn: () => "🕴️ He shouts 'YOU'LL BE BACK.' You probably won't." }
+  ]},
+  { tier: 1, text: "Jun the barista slides you a note: 'Meet me behind the café. Come alone. Bring snacks.'", choices: [
+    { label: "Go (with snacks)", fn: s => { s.neighbors.jun += 15; gainXP("smarts", 25); return "🛸 Jun showed you 'evidence' that pigeons are drones. It was... compelling. +Smarts"; } },
+    { label: "Report Jun to Jun's manager", fn: () => "☕ Jun IS the manager. Jun is also the owner. Jun is everywhere." }
+  ]},
+  { tier: 1, text: "Your houseplant has grown 3 feet overnight and appears to be facing you.", choices: [
+    { label: "Water it", fn: s => { gainXP("creativity", 20); return "🌱 It purred. Plants don't purr. +Creativity"; } },
+    { label: "Have a frank conversation with it", fn: s => { gainXP("charm", 25); N().fun += 10; return "🌿 It's a great listener. Better than Dev. +Charm, +Fun"; } }
+  ]},
+  { tier: 1, text: "You wake up from a nap fluent in a language that doesn't exist.", choices: [
+    { label: "Write a dictionary", fn: s => { gainXP("smarts", 40); return "📕 'Blorvish for Beginners' is a surprise bestseller in your head. +Smarts"; } },
+    { label: "Order coffee in it", fn: s => { N().fun += 20; return "☕ The barista answered fluently. You both agree not to talk about it. +Fun"; } }
+  ]},
+  { tier: 1, text: "A goose in a tiny suit asks for your vote in the city election.", choices: [
+    { label: "Pledge support", fn: s => { s.money += 40; return "🪿 The goose wins. You receive a $40 'consulting fee' in breadcrumbs (and cash)."; } },
+    { label: "Ask about its policies", fn: s => { N().energy -= 10; gainXP("smarts", 20); return "🪿 'HONK.' A surprisingly nuanced take on zoning. +Smarts"; } }
+  ]},
+  { tier: 1, text: "Rosa insists you join her for 'one song' at the opera house. Tonight.", choices: [
+    { label: "Sing! (Charm)", fn: s => chk("charm", 5)
+      ? (N().fun += 30, s.neighbors.rosa += 15, "🎭 Standing ovation. Rosa called you 'her protégé'. +30 Fun")
+      : (N().fun += 10, "🎭 You hit a note only dogs could hear. Rosa says it was 'brave'.") },
+    { label: "Fake laryngitis", fn: () => "🤐 You mime the word 'sorry' with your whole body." }
+  ]},
+  { tier: 1, text: "You find a door in your apartment that wasn't there yesterday.", choices: [
+    { label: "Open it", fn: s => {
+      const r = Math.random();
+      if (r < 0.5) { s.money += 60; return "🚪 It's a closet full of loose change. +$60"; }
+      if (r < 0.8) { N().energy = maxEnergy(); return "🚪 A perfectly made bed and a mint. You nap. Full energy."; }
+      return "🚪 It's another you, opening the same door. You both close it politely.";
+    } },
+    { label: "Put a bookshelf in front of it", fn: () => "📚 Out of sight, out of mind. It knocks sometimes." }
+  ]},
+
+  // ---------- TIER 2: cosmic (high rank) ----------
+  { tier: 2, text: "An alien delegation arrives. Their leader asks to 'speak to the manager of Earth'. Everyone points at you.", choices: [
+    { label: "Negotiate (Charm)", fn: s => chk("charm", 8)
+      ? (s.money += 1000, "👽 Trade deal signed: Earth gets warp tech, aliens get pizza. +$1000")
+      : (N().fun -= 20, "👽 They were offended by your handshake. Earth's Wi-Fi is slower now. −Fun") },
+    { label: "Offer them a job", fn: s => { s.career.perf += 15; return "👽 They're excellent interns. They don't need sleep or chairs. +15 Perf"; } }
+  ]},
+  { tier: 2, text: "Your future self appears in a puff of smoke. 'Listen carefully. Do NOT eat the—' and vanishes.", choices: [
+    { label: "Stop eating entirely", fn: () => { N().hunger -= 20; return "⏳ You eye every food suspiciously. −20 Hunger. Was it the soup? It was probably the soup."; } },
+    { label: "Shrug and eat a sandwich", fn: () => { N().hunger += 30; return "🥪 Nothing happened. Probably. You feel slightly more... temporal."; } }
+  ]},
+  { tier: 2, text: "The Moon sends you a formal letter. It would like to be paid for its services.", choices: [
+    { label: "Pay the Moon ($500)", fn: s => { s.money -= 500; N().fun += 30; return "🌕 The Moon is satisfied. Tides are extra nice tonight."; } },
+    { label: "Countersue the Moon (Smarts)", fn: s => chk("smarts", 9)
+      ? (s.money += 2000, "⚖️ You WON. The Moon owes you $2000 in back rent.")
+      : (N().energy -= 30, "⚖️ You lost. The Moon is smug. You're exhausted.") }
+  ]},
+  { tier: 2, text: "Your houseplant has become a world power. It requests a summit.", choices: [
+    { label: "Attend the summit", fn: s => { gainXP("charm", 60); return "🌿 You signed the Treaty of the Windowsill. Historians will study it. +Charm"; } },
+    { label: "Repot it as a power move", fn: s => { N().fun += 25; return "🪴 It respects you more now. Ominously. +Fun"; } }
+  ]},
+  { tier: 2, text: "Reality glitches. For a moment, you see the numbers behind everything. Including your own.", choices: [
+    { label: "Edit your money", fn: s => { s.money = Math.round(s.money * 1.5); return "🧮 You add a zero. It becomes ×1.5. Reality has limits, apparently."; } },
+    { label: "Edit your needs", fn: s => { N().energy = maxEnergy(); N().hunger = 100; N().fun = 100; return "🧮 All bars: full. You feel like a cheat code."; } },
+    { label: "Close your eyes", fn: () => "🙈 Some things aren't meant to be seen. Like your browser tab count." }
+  ]},
+  { tier: 2, text: "A cult has formed around you. They'd like you to say a few words.", choices: [
+    { label: "Say 'Be nice to each other'", fn: s => { N().fun += 20; s.career.perf += 5; return "🕯️ Crime drops 40% globally. The cult now just does community gardening."; } },
+    { label: "Say 'Bring me snacks'", fn: () => { N().hunger = 100; return "🕯️ Snacks arrive within minutes. Forever. Hunger: full."; } }
+  ]},
+  { tier: 2, text: "Death knocks on your door. It's holding a clipboard. 'Just a routine audit.'", choices: [
+    { label: "Offer tea", fn: s => { N().fun += 15; return "💀 Death loves chamomile. You're 'all good for now'. Nice guy, actually."; } },
+    { label: "Challenge to a board game (Smarts)", fn: s => chk("smarts", 8)
+      ? (N().energy = maxEnergy(), "♟️ You won. Death grants you endless vigor (until tomorrow).")
+      : (s.money -= 200, "♟️ Death won. It took $200 'for the trouble'. Fair.") }
+  ]}
+];
+
+// =====================================================================
+// STATE
+// =====================================================================
+const state = {
+  name: "Sam", trait: "athletic",
+  day: 1, hour: 8, money: 50,
+  needs: { energy: 80, hunger: 70, fun: 60 },
+  skills: { fitness: 0, cooking: 0, charm: 0, smarts: 0, creativity: 0 },
+  career: { track: "office", rank: 1, shiftsAtRank: 0, perf: 50, shiftDone: false, overtimeDone: false },
+  neighbors: { rosa: 0, dev: 0, pickles: 0, jun: 0 },
+  weather: WEATHER[0],
+  today: { money: 50, xp: 0, perf: 50 },
+  thoughtsShown: {},
+  log: [],
+  started: false
+};
+
+// =====================================================================
+// HELPERS
+// =====================================================================
+const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+const pad = h => String(h).padStart(2, "0") + ":00";
+const esc = s => s.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const level = sk => Math.min(10, Math.floor(state.skills[sk] / 100));
+const maxEnergy = () => 100 + 5 * level("fitness");
+const maxOf = k => (k === "energy" ? maxEnergy() : 100);
+const hasTrait = t => state.trait === t;
+const dayName = d => DAYS[(d - 1) % 7];
+const isWeekend = () => (state.day - 1) % 7 >= 5;
+const career = () => CAREERS[state.career.track];
+const rankInfo = () => career().ranks[state.career.rank - 1];
+const workClose = () => (hasTrait("nightowl") ? 23 : 21);
+const isRainy = () => state.weather.name === "Rainy";
+
+function clampNeeds() {
+  for (const k in state.needs) state.needs[k] = Math.max(0, Math.min(maxOf(k), Math.round(state.needs[k])));
+}
+
+function log(text, cls = "") {
+  state.log.unshift({ text: `> ${pad(state.hour)} ${text}`, cls });
+  state.log.length = Math.min(state.log.length, 30);
+}
+function logRaw(text, cls = "") {
+  state.log.unshift({ text, cls });
+  state.log.length = Math.min(state.log.length, 30);
+}
+
+function bar(v, max, width = 20) {
+  const filled = Math.max(0, Math.min(width, Math.round((v / max) * width)));
+  return "[" + "█".repeat(filled) + "░".repeat(width - filled) + "]";
+}
+
+function levelClass(v) { return v < 15 ? "danger" : v < 30 ? "warn" : ""; }
+
+function moodEmoji() {
+  const n = state.needs;
+  const avg = (n.energy / maxEnergy() * 100 + n.hunger + n.fun) / 3;
+  return avg >= 70 ? "😄" : avg >= 50 ? "🙂" : avg >= 30 ? "😐" : "😟";
+}
+
+function timeOfDay() {
+  const h = state.hour;
+  if (h < 12) return { key: "morning", emoji: "🌅" };
+  if (h < 17) return { key: "afternoon", emoji: "🌞" };
+  if (h < 21) return { key: "evening", emoji: "🌆" };
+  return { key: "night", emoji: "🌙" };
+}
+
+function gainXP(sk, amt) {
+  const t = TRAITS[state.trait];
+  if (t.skill === sk) amt *= 1.5;
+  amt = Math.round(amt);
+  const before = level(sk);
+  state.skills[sk] = Math.min(1000, state.skills[sk] + amt);
+  state.today.xp += amt;
+  const after = level(sk);
+  if (after > before) {
+    log(`⭐ ${SKILL_LABELS[sk].toUpperCase()} LEVEL ${after}! ${pick(LEVELUP_QUIPS[sk])}`, "big");
+  }
+}
+
+// =====================================================================
+// ACTIONS
+// =====================================================================
+// available(s) -> true | "reason". open: [opensAt, closesAt] (must finish by close).
+const ACTIONS = [
+  // ---------- HOME ----------
+  {
+    group: "🏠 Home", emoji: "🍳", label: "Cook", hours: 1, cost: () => 4,
+    effect: s => {
+      const lvl = level("cooking");
+      s.needs.hunger += 30 + 5 * lvl + (hasTrait("foodie") ? 10 : 0);
+      if (Math.random() < 0.05 + 0.05 * lvl) {
+        s.needs.fun += 15;
+        log(`✨ Masterpiece meal! ${pick(["Restaurant quality. You applauded yourself.", "You took 12 photos before eating it.", "Somewhere, a chef shed a single tear."])}`);
+      } else {
+        log(pick(lvl < 2
+          ? ["You made toast. Slightly on fire, but toast.", "You microwaved leftovers with tremendous confidence.", "Instant noodles, but you added an egg. Fancy."]
+          : ["You whipped up a stir-fry. Not bad at all.", "Homemade pasta. Your kitchen looks like a flour bomb hit it.", "You made soup from scratch. The apartment smells amazing."]));
+      }
+      gainXP("cooking", 25);
+    }
+  },
+  {
+    group: "🏠 Home", emoji: "📖", label: "Study", hours: 2,
+    effect: s => {
+      s.needs.fun -= 10; s.needs.energy -= 10;
+      log(pick(["You read a textbook. Some of it went in.", "You watched a lecture at 1.5× speed.", "You learned 30 words of Portuguese.", "You did logic puzzles until your brain hummed."]));
+      gainXP("smarts", 30 * (1 + 0.1 * level("smarts")));
+    }
+  },
+  {
+    group: "🏠 Home", emoji: "🎨", label: "Create", hours: 2,
+    effect: s => {
+      s.needs.fun += 15;
+      const lvl = level("creativity");
+      const what = pick(CREATIONS);
+      if (lvl >= 3) {
+        const earn = 5 * lvl;
+        s.money += earn;
+        log(`You ${what} and sold it online. +$${earn}`);
+      } else {
+        log(`You ${what}. ${pick(["It's... a start.", "Your mom would love it.", "Art is subjective, right?", "Honestly? Not bad."])}`);
+      }
+      gainXP("creativity", 30);
+    }
+  },
+  {
+    group: "🏠 Home", emoji: "🎮", label: "Play", hours: 2,
+    effect: s => {
+      s.needs.fun += 35 - (hasTrait("bookworm") ? 10 : 0) + (isRainy() ? 5 : 0);
+      log(`You enjoyed ${pick(GAMES)}.${isRainy() ? " Perfect rainy-day activity." : ""}`);
+    }
+  },
+  // ---------- OUT ----------
+  {
+    group: "🏙️ Out & About", emoji: "🍔", label: "Eat out", hours: 1, cost: () => (hasTrait("foodie") ? 15 : 10),
+    effect: s => {
+      s.needs.hunger += 40; s.needs.fun += 5;
+      log(`You ate at ${pick(RESTAURANTS)}. ${pick(["Delicious.", "Questionable, but filling.", "The waiter called you 'chief'.", "You'll be back."])}`);
+    }
+  },
+  {
+    group: "🏙️ Out & About", emoji: "🏋️", label: "Gym", hours: 2, cost: () => 5, open: [6, 22],
+    effect: s => {
+      s.needs.energy -= 20; s.needs.fun += 5;
+      log(pick(["You lifted heavy things and put them down.", "You ran 3 miles on a treadmill to nowhere.", "You took a spin class. The instructor screamed encouragement.", "You did yoga. You are now 2% more bendy."]));
+      gainXP("fitness", 35);
+    }
+  },
+  {
+    group: "🏙️ Out & About", emoji: "☕", label: "Café", hours: 1, cost: () => 3, open: [7, 19],
+    effect: s => {
+      const id = pick(Object.keys(NEIGHBORS));
+      const nb = NEIGHBORS[id];
+      const roll = Math.random() * 100 + level("charm") * 8;
+      let tier, fun, friend;
+      if (roll < 35) { tier = "awkward"; fun = 5; friend = 2; }
+      else if (roll < 85) { tier = "good"; fun = 20; friend = 6; }
+      else { tier = "great"; fun = 30; friend = 12; }
+      s.needs.fun += fun;
+      s.neighbors[id] = Math.min(100, s.neighbors[id] + friend);
+      log(`${nb.emoji} ${pick(nb[tier])}${tier === "great" ? " 💖" : ""}`);
+      gainXP("charm", 30);
+    }
+  },
+  {
+    group: "🏙️ Out & About", emoji: "🌳", label: "Park", hours: 1, open: [7, 20],
+    effect: s => {
+      const w = state.weather.name;
+      s.needs.fun += 10 + (w === "Rainy" ? -5 : w === "Snowy" ? 5 : 0);
+      s.needs.energy += 5;
+      let msg = w === "Rainy" ? "You walked in the rain. Damp but peaceful." :
+                w === "Snowy" ? "You made a snow angel. It came out lopsided." :
+                w === "Foggy" ? "You walked through the fog like a mysterious novel character." :
+                "You strolled through the park. Birds, trees, the works.";
+      if (Math.random() < 0.3) {
+        const f = pick(PARK_FINDS);
+        s.money += f.money;
+        msg += " " + f.text;
+      }
+      log(msg);
+      gainXP("fitness", 10);
+    }
+  },
+  // ---------- WORK ----------
+  {
+    group: "💼 Work", emoji: "💼", label: "Work shift", hours: 4,
+    labelFn: () => `Work shift 4h (+$${rankInfo().pay})`,
+    available: s => {
+      if (isWeekend()) return "It's the weekend!";
+      if (s.career.shiftDone) return "You already worked today";
+      if (s.hour < 8) return "Office opens at 08:00";
+      if (s.hour + 4 > workClose()) return `Work closes at ${pad(workClose())}`;
+      return true;
+    },
+    effect: s => {
+      const n = s.needs;
+      const minNeed = Math.min(n.energy / maxEnergy() * 100, n.hunger, n.fun);
+      const r = rankInfo();
+      s.money += r.pay;
+      n.fun -= 10 + (hasTrait("charmer") ? 5 : 0);
+      log(`💼 ${pick(r.lines)} +$${r.pay}`);
+      if (minNeed >= 50) {
+        s.career.perf = Math.min(100, s.career.perf + 8);
+        log(pick(["Your boss nodded at you approvingly.", "You were on fire today. 🔥", "Someone said 'great work' and meant it."]));
+      } else if (minNeed < 30) {
+        s.career.perf = Math.max(0, s.career.perf - 5);
+        log(pick(["Your boss asked if you're 'doing okay'. Yikes.", "You fell asleep in a meeting. Briefly. Everyone saw.", "You put salt in someone's coffee. On accident."]), "thought");
+      } else {
+        s.career.perf = Math.min(100, s.career.perf + 2);
+      }
+      s.career.shiftsAtRank++;
+      s.career.shiftDone = true;
+      gainXP(career().skills[0], 15);
+    },
+    after: s => {
+      s.needs.energy += 2 * Math.floor(level("fitness") / 2);
+      checkPromotion();
+    }
+  },
+  {
+    group: "💼 Work", emoji: "🗂️", label: "Overtime", hours: 2,
+    labelFn: () => `Overtime 2h (+$${Math.round(rankInfo().pay / 4 * 1.5 * 2)})`,
+    available: s => {
+      if (!s.career.shiftDone) return "Work a shift first";
+      if (s.career.overtimeDone) return "Already did overtime today";
+      if (s.hour + 2 > workClose()) return `Work closes at ${pad(workClose())}`;
+      return true;
+    },
+    effect: s => {
+      const pay = Math.round(rankInfo().pay / 4 * 1.5 * 2);
+      s.money += pay;
+      s.needs.fun -= 15;
+      s.career.overtimeDone = true;
+      s.career.perf = Math.min(100, s.career.perf + 3);
+      log(`🗂️ ${pick(["You stayed late. The janitor is your best friend now.", "Overtime. The office is eerily quiet.", "You worked late. The vending machine ate your dollar."])} +$${pay}`);
+    }
+  },
+  {
+    group: "💼 Work", emoji: "📋", label: "Job board", hours: 0,
+    available: () => true,
+    special: "jobboard"
+  },
+  // ---------- REST ----------
+  {
+    group: "🛏️ Rest", emoji: "😴", label: "Nap", hours: 2,
+    effect: s => {
+      s.needs.energy += 20;
+      log(pick(["You took a nap. Feeling refreshed.", "You napped and dreamed about sandwiches.", "A 'quick' nap. Your face has pillow lines."]));
+    }
+  },
+  {
+    group: "🛏️ Rest", emoji: "🛏️", label: "Sleep", hours: 0, isSleep: true,
+    available: s => (s.hour >= 20 || s.needs.energy < 25) || "Not tired yet (after 20:00 or low energy)"
+  }
+];
+
+const costOf = a => (a.cost ? a.cost(state) : 0);
+
+function canDo(a) {
+  if (a.available) {
+    const ok = a.available(state);
+    if (ok !== true) return ok;
+  }
+  if (a.open) {
+    if (state.hour < a.open[0]) return `Opens at ${pad(a.open[0])}`;
+    if (state.hour + a.hours > a.open[1]) return `Closes at ${pad(a.open[1])}`;
+  }
+  const c = costOf(a);
+  if (c > 0 && state.money < c) return `Not enough money ($${c})`;
+  if (!a.isSleep && state.hour + a.hours > 24) return "Too late. Time for bed.";
+  return true;
+}
+
+// =====================================================================
+// CAREER
+// =====================================================================
+const maxRank = () => career().ranks.length;
+const skillNeed = () => Math.min(10, state.career.rank);
+const shiftNeed = () => state.career.rank + 1;
+
+const PROMO_QUIPS_NORMAL = [
+  `Your boss: "Honestly, we should've done this sooner."`,
+  `Your boss: "Don't let it go to your head. ...Okay, a little."`,
+  `Your boss: "Big shoes to fill. You've got big feet."`,
+  `Your boss: "Cake is in the break room. It's for you. Mostly."`
+];
+const PROMO_QUIPS_WEIRD = [
+  "Your former boss now works for you. He brings you grapes.",
+  "A choir of unseen voices hums your name for exactly 4 seconds.",
+  "The previous holder of this title was a hologram. You're an upgrade.",
+  "You receive a ceremonial cape. It is slightly too long. Perfect.",
+  "Somewhere, a pigeon salutes.",
+  "Your houseplant has begun to address you as 'Sovereign'."
+];
+const FAME_HEADLINES = [
+  "{name} Spotted Buying Groceries; Grocery Store Now a Shrine",
+  "Scientists Study {name}'s Morning Routine, Remain Baffled",
+  "{name} Sneezes; Global Markets React",
+  "Town Renames Maple Street to '{name} Boulevard'",
+  "Poll: 94% of Citizens 'Slightly Afraid' of {name}",
+  "{name}'s Houseplant Gets Its Own Talk Show",
+  "Ancient Prophecy Mentions '{name}', Experts Say 'Yeah, Probably'"
+];
+
+function checkPromotion() {
+  const c = state.career;
+  if (c.rank >= maxRank()) return;
+  const [s1, s2] = career().skills;
+  if (c.shiftsAtRank >= shiftNeed() && c.perf >= 60 && level(s1) >= skillNeed() && level(s2) >= skillNeed()) {
+    c.rank++;
+    c.shiftsAtRank = 0;
+    c.perf = 55;
+    const r = rankInfo();
+    log(`★ PROMOTED: ${r.title.toUpperCase()} ★  Pay is now $${r.pay}/shift.`, "big");
+    log(pick(c.rank >= 7 ? PROMO_QUIPS_WEIRD : PROMO_QUIPS_NORMAL));
+    if (c.rank === maxRank()) log(`🌌 You have reached the end of the ${career().name} ladder. There is nowhere left to climb. Only sideways. Or up, into the void.`, "big");
+  }
+}
+
+function promotionHint() {
+  const c = state.career;
+  if (c.rank >= maxRank()) return "You ARE the ladder now.";
+  const [s1, s2] = career().skills;
+  const need = [];
+  if (level(s1) < skillNeed()) need.push(`${SKILL_LABELS[s1]} ${skillNeed()}`);
+  if (level(s2) < skillNeed()) need.push(`${SKILL_LABELS[s2]} ${skillNeed()}`);
+  if (c.shiftsAtRank < shiftNeed()) need.push(`${shiftNeed() - c.shiftsAtRank} more shifts`);
+  if (c.perf < 60) need.push("Perf 60");
+  return need.length ? "Next promo: " + need.join(", ") : "Promotion ready next shift!";
+}
+
+// =====================================================================
+// CORE LOOP
+// =====================================================================
+function advanceTime(hours) {
+  for (let i = 0; i < hours; i++) {
+    state.hour++;
+    state.needs.energy -= DECAY.energy;
+    state.needs.hunger -= DECAY.hunger + (hasTrait("athletic") ? 1 : 0);
+    state.needs.fun -= DECAY.fun;
+    clampNeeds();
+  }
+}
+
+function checkThoughts() {
+  for (const k in state.needs) {
+    const pct = state.needs[k] / maxOf(k) * 100;
+    if (pct < 30 && !state.thoughtsShown[k]) {
+      state.thoughtsShown[k] = true;
+      log(`💭 ${pick(THOUGHTS[k])}`, "thought");
+    } else if (pct >= 40) {
+      state.thoughtsShown[k] = false;
+    }
+  }
+}
+
+function daySummary() {
+  const t = state.today;
+  const n = state.needs;
+  if (!isWeekend() && !state.career.shiftDone) {
+    state.career.perf = Math.max(0, state.career.perf - 10);
+    log("📉 You skipped work today. Your boss noticed the empty desk.", "thought");
+  }
+  const earned = state.money - t.money;
+  const perfDelta = state.career.perf - t.perf;
+  const mood = (n.energy / maxEnergy() * 100 + n.hunger + n.fun) / 3;
+  const score = mood * 0.5 + Math.min(50, Math.max(0, earned) / 2 + t.xp / 4);
+  const grade = score >= 85 ? "A+" : score >= 75 ? "A" : score >= 65 ? "B" : score >= 50 ? "C" : score >= 35 ? "D" : "F";
+  const sign = v => (v >= 0 ? "+" : "") + v;
+  logRaw(
+    `── ${dayName(state.day)} · Day ${state.day} recap ──\n` +
+    `Money ${sign(earned)}   Skill XP +${t.xp}   Performance ${sign(perfDelta)}\n` +
+    `Day grade: ${grade}`,
+    "summary"
+  );
+}
+
+function morningBriefing() {
+  const total = WEATHER.reduce((a, w) => a + w.weight, 0);
+  let r = Math.random() * total;
+  state.weather = WEATHER.find(w => (r -= w.weight) < 0) || WEATHER[0];
+  state.today = { money: state.money, xp: 0, perf: state.career.perf };
+  const weekendNote = isWeekend() ? " It's the weekend, so no work!" : "";
+  log(`☀️ ${dayName(state.day)}, Day ${state.day}. ${state.weather.emoji} ${state.weather.name}.${weekendNote}`);
+  const famous = state.career.rank >= 6 && Math.random() < 0.6;
+  const headline = famous ? pick(FAME_HEADLINES).replace("{name}", state.name) : pick(HEADLINES);
+  log(`📰 "${headline}"`, "news");
+}
+
+function newDay(msg) {
+  daySummary();
+  state.day++;
+  state.hour = 8;
+  state.needs.hunger = Math.max(5, state.needs.hunger - 15);
+  state.career.shiftDone = false;
+  state.career.overtimeDone = false;
+  if (msg) log(msg);
+  morningBriefing();
+}
+
+function sleep(forced) {
+  if (forced && !hasTrait("nightowl")) {
+    log("🌙 You collapse into bed, exhausted.");
+    state.needs.energy = 60;
+    state.needs.fun -= 10;
+    clampNeeds();
+    newDay("You wake up groggy.");
+  } else {
+    log(forced ? "🦉 Midnight? Pfft. You drift off whenever you feel like it." :
+      pick(["🌙 You climb into bed. Goodnight.", "🌙 You fall asleep mid-thought.", "🌙 You count sheep. You lose count at 7."]));
+    state.needs.energy = maxEnergy();
+    newDay();
+  }
+}
+
+function checkPassOut() {
+  const n = state.needs;
+  if (n.energy <= 0) {
+    log("💫 You pass out from exhaustion! Medical bill −$20.");
+    state.money -= 20;
+    n.energy = 60;
+    newDay("You wake up in a daze.");
+    return true;
+  }
+  if (n.hunger <= 0) {
+    log("💫 You faint from hunger! Medical bill −$20.");
+    state.money -= 20;
+    n.hunger = 30;
+    n.energy = Math.max(n.energy, 50);
+    newDay("You wake up starving but alive.");
+    return true;
+  }
+  if (n.fun <= 0) {
+    log("😩 You have a breakdown and call it a day.");
+    n.fun = 40;
+    n.energy = Math.max(n.energy, 50);
+    newDay("A fresh start. Maybe go easy today.");
+    return true;
+  }
+  return false;
+}
+
+let jobBoardOpen = false;
+
+function doAction(a) {
+  if (canDo(a) !== true) return;
+  if (a.special === "jobboard") { jobBoardOpen = true; render(); return; }
+  if (a.isSleep) { sleep(false); render(); return; }
+
+  state.money -= costOf(a);
+  if (hasTrait("nightowl") && state.hour < 10) {
+    state.needs.energy -= 5;
+    log("🦉 Mornings are not your thing. −5 energy.", "thought");
+  }
+  a.effect(state);
+  clampNeeds();
+  advanceTime(a.hours);
+  if (a.after) { a.after(state); clampNeeds(); }
+
+  if (!checkPassOut()) {
+    checkThoughts();
+    if (state.hour >= 24) sleep(true);
+    else maybeEvent();
+  }
+  render();
+}
+
+// ---------- Random events ----------
+let pendingEvent = null;
+
+function maybeEvent() {
+  if (Math.random() >= 0.25) return;
+  const r = state.career.rank, x = Math.random();
+  // the further you get, the weirder it gets
+  const tier = r >= 7 ? (x < 0.6 ? 2 : x < 0.85 ? 1 : 0)
+             : r >= 4 ? (x < 0.15 ? 2 : x < 0.65 ? 1 : 0)
+             : (x < 0.15 ? 1 : 0);
+  pendingEvent = pick(EVENTS.filter(e => e.tier === tier));
+}
+
+function resolveEvent(choice) {
+  const result = choice.fn(state);
+  pendingEvent = null;
+  state.career.perf = Math.max(0, Math.min(100, state.career.perf));
+  for (const k in state.neighbors) state.neighbors[k] = Math.min(100, state.neighbors[k]);
+  clampNeeds();
+  log(result);
+  if (!checkPassOut()) checkThoughts();
+  render();
+}
+
+function switchCareer(id) {
+  jobBoardOpen = false;
+  if (id && id !== state.career.track) {
+    state.career = { track: id, rank: 1, shiftsAtRank: 0, perf: 50, shiftDone: state.career.shiftDone, overtimeDone: state.career.overtimeDone };
+    log(`📋 You quit and started over as a ${rankInfo().title} in ${career().name}. Bold move.`, "big");
+  }
+  render();
+}
+
+// =====================================================================
+// RENDER
+// =====================================================================
+let shownActions = [];
+const KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "q", "w", "e", "r", "t", "y", "u", "i", "o", "p"];
+
+function render() {
+  const tod = timeOfDay();
+  document.body.dataset.time = tod.key;
+  document.getElementById("clock").textContent =
+    `${tod.emoji} ${dayName(state.day)} · Day ${state.day} · ${pad(state.hour)} ${state.weather.emoji}`;
+  document.getElementById("mood").textContent = moodEmoji();
+
+  const t = TRAITS[state.trait];
+  const c = state.career;
+  document.getElementById("identity").innerHTML =
+    `<b>${esc(state.name)}</b> · ${t.emoji} ${t.name} · ${career().emoji} <b>${rankInfo().title}</b> (Perf ${c.perf}) · ${promotionHint()}`;
+
+  // Needs column
+  let html = `<div class="colhead">Needs</div>`;
+  for (const k in state.needs) {
+    const v = state.needs[k], max = maxOf(k);
+    const cls = levelClass(v / max * 100);
+    html += `<div class="row ${cls}"><span class="label">${NEED_LABELS[k]}</span>` +
+            `<span class="bar">${bar(v, max, 16)}</span><span class="val">${v}</span>${cls ? "<span>⚠</span>" : ""}</div>`;
+  }
+  html += `<div class="row ${state.money < 0 ? "danger" : ""}"><span class="label">Money</span><span>$${state.money}</span></div>`;
+  document.getElementById("needs").innerHTML = html;
+
+  // Skills column
+  let sk = `<div class="colhead">Skills</div>`;
+  for (const s of SKILLS) {
+    const lvl = level(s);
+    const prog = lvl >= 10 ? 10 : Math.floor((state.skills[s] % 100) / 10);
+    sk += `<div class="row"><span class="label">${SKILL_LABELS[s]}</span>` +
+          `<span class="stars">${"★".repeat(lvl)}${"☆".repeat(10 - lvl)}</span>` +
+          `<span class="xpbar">${"▮".repeat(prog)}${"▯".repeat(10 - prog)}</span></div>`;
+  }
+  document.getElementById("skills").innerHTML = sk;
+
+  // Log
+  document.getElementById("log").innerHTML =
+    state.log.map(l => `<div class="${l.cls}">${esc(l.text)}</div>`).join("");
+
+  // Actions
+  const box = document.getElementById("actions");
+  box.innerHTML = "";
+  shownActions = [];
+
+  if (pendingEvent) {
+    const ev = pendingEvent;
+    const tierLabel = ["❗ Something happens…", "🌀 Something odd happens…", "🌌 SOMETHING COSMIC HAPPENS"][ev.tier];
+    const g = document.createElement("div");
+    g.className = "group";
+    g.innerHTML = `<div class="group-title">${tierLabel}</div><div style="margin-bottom:8px;color:var(--bright)">${esc(ev.text)}</div>`;
+    const btns = document.createElement("div");
+    btns.className = "btns";
+    ev.choices.forEach((c, i) => {
+      shownActions.push({ eventChoice: c });
+      const b = document.createElement("button");
+      b.innerHTML = `<span class="key">${KEYS[i].toUpperCase()}</span> ${esc(c.label)}`;
+      b.onclick = () => resolveEvent(c);
+      btns.appendChild(b);
+    });
+    g.appendChild(btns);
+    box.appendChild(g);
+    return;
+  }
+
+  if (jobBoardOpen) {
+    const g = document.createElement("div");
+    g.className = "group";
+    g.innerHTML = `<div class="group-title">📋 Job board: switching careers resets you to rank 1</div>`;
+    const btns = document.createElement("div");
+    btns.className = "btns";
+    for (const id in CAREERS) {
+      const cc = CAREERS[id];
+      const b = document.createElement("button");
+      b.textContent = `${cc.emoji} ${cc.name} (${cc.skills.map(x => SKILL_LABELS[x]).join("+")})`;
+      b.disabled = id === state.career.track;
+      if (b.disabled) b.title = "Your current career";
+      b.onclick = () => switchCareer(id);
+      btns.appendChild(b);
+    }
+    const back = document.createElement("button");
+    back.textContent = "← Never mind";
+    back.onclick = () => switchCareer(null);
+    btns.appendChild(back);
+    g.appendChild(btns);
+    box.appendChild(g);
+    return;
+  }
+
+  const groups = {};
+  for (const a of ACTIONS) (groups[a.group] = groups[a.group] || []).push(a);
+  for (const gName in groups) {
+    const g = document.createElement("div");
+    g.className = "group";
+    g.innerHTML = `<div class="group-title">${gName}</div>`;
+    const btns = document.createElement("div");
+    btns.className = "btns";
+    for (const a of groups[gName]) {
+      const idx = shownActions.length;
+      shownActions.push(a);
+      const ok = canDo(a);
+      const b = document.createElement("button");
+      const cost = costOf(a);
+      const label = a.labelFn ? a.labelFn() :
+        `${a.label}${a.hours && !a.isSleep ? ` ${a.hours}h` : ""}${cost ? ` $${cost}` : ""}`;
+      b.innerHTML = `<span class="key">${KEYS[idx].toUpperCase()}</span> ${a.emoji} ${esc(label)}`;
+      b.disabled = ok !== true;
+      if (ok !== true) b.title = ok;
+      b.onclick = () => doAction(a);
+      btns.appendChild(b);
+    }
+    g.appendChild(btns);
+    box.appendChild(g);
+  }
+}
+
+document.addEventListener("keydown", e => {
+  if (!state.started || e.target.tagName === "INPUT") return;
+  const k = e.key.toLowerCase();
+  if (jobBoardOpen) {
+    if (k === "escape") switchCareer(null);
+    return;
+  }
+  const i = KEYS.indexOf(k);
+  if (i < 0 || !shownActions[i]) return;
+  if (shownActions[i].eventChoice) resolveEvent(shownActions[i].eventChoice);
+  else doAction(shownActions[i]);
+});
+
+// =====================================================================
+// SETUP SCREEN
+// =====================================================================
+function buildChoices(containerId, data, key, onPick) {
+  const box = document.getElementById(containerId);
+  box.innerHTML = "";
+  for (const id in data) {
+    const d = data[id];
+    const b = document.createElement("button");
+    b.innerHTML = `${d.emoji} ${d.name}<small>${key(d)}</small>`;
+    b.dataset.id = id;
+    b.onclick = () => {
+      onPick(id);
+      [...box.children].forEach(c => c.classList.toggle("selected", c.dataset.id === id));
+    };
+    box.appendChild(b);
+  }
+}
+
+buildChoices("traitChoices", TRAITS, d => d.desc, id => (state.trait = id));
+buildChoices("careerChoices", CAREERS,
+  d => `${d.ranks[0].title} → ${d.ranks[5].title} → ???. Needs ${d.skills.map(x => SKILL_LABELS[x]).join(" + ")}.`,
+  id => (state.career.track = id));
+document.querySelector('#traitChoices [data-id="athletic"]').classList.add("selected");
+document.querySelector('#careerChoices [data-id="office"]').classList.add("selected");
+
+document.getElementById("startBtn").onclick = () => {
+  state.name = document.getElementById("nameInput").value.trim() || "Sam";
+  state.started = true;
+  document.getElementById("setup").classList.add("hidden");
+  document.getElementById("game").classList.remove("hidden");
+  morningBriefing();
+  log(`🏠 ${state.name} moves into a tiny apartment on Maple Street with $50 and a suspicious houseplant.`);
+  log(`💼 First day as a ${rankInfo().title}. ${pick(["Try not to trip.", "You ironed your shirt. Mostly.", "Your mom texted 'good luck!!!' with 9 emojis."])}`);
+  render();
+};
+</script>
+</body>
+</html>
